@@ -6,7 +6,6 @@ services:
     region: singapore
     healthCheckPath: /api/health
     numInstances: 1
-    maxShutdownDelaySeconds: 90
     disk:
       name: lumina-data
       mountPath: /app/data
