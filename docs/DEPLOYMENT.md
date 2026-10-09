@@ -60,6 +60,6 @@ uncertain 先人工核对供应商记录。命令不访问供应商、不产生�
 
 ## Render 公网部署
 
-根目录 `render.yaml` 定义单实例 Docker Web Service、`/app/data` 持久磁盘、健康检查与 HTTPS 会话配置。先把源码推送到私有 GitHub 仓库，再让 Render 连接该仓库并创建服务。Render 会为 `APP_ORIGINS` 自动注入本服务的 `RENDER_EXTERNAL_URL`；不需要把本机 `.env` 或 API Key 上传到 GitHub。访客注册后需自行添加支持生图的模型连接，才能真实生图。
+根目录 `render.yaml` 定义单实例 Docker Web Service、`/app/data` 持久磁盘、健康检查与 HTTPS 会话配置。启动脚本会先修正数据盘根目录的所属用户，然后以 `lumina` 非 root 用户运行应用。先把源码推送到私有 GitHub 仓库，再让 Render 连接该仓库并创建服务。Render 会为 `APP_ORIGINS` 自动注入本服务的 `RENDER_EXTERNAL_URL`；不需要把本机 `.env` 或 API Key 上传到 GitHub。访客注册后需自行添加支持生图的模型连接，才能真实生图。
 
 该配置使用付费计算实例和持久磁盘。磁盘只能增大，不能缩小；同一磁盘只能供单实例使用。首次上线后验证 `/api/health`、注册、登录、模型连接、实际生图和图片持久化，再分享站点地址。`/app/data` 是唯一持久化路径，应按上文定期备份。
