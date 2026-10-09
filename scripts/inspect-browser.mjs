@@ -1,0 +1,12 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({ channel: process.platform === 'win32' ? 'msedge' : undefined, headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+const failures = [];
+page.on('pageerror', error => failures.push({ type: 'page', message: error.message }));
+page.on('console', message => { if (message.type() === 'error') failures.push({ type: 'console', message: message.text() }); });
+page.on('response', response => { if (response.status() >= 400) failures.push({ type: 'http', url: response.url(), status: response.status() }); });
+await page.goto(process.argv[2] || 'http://127.0.0.1:8090/studio');
+await page.waitForTimeout(1500);
+console.log(JSON.stringify({ title: await page.title(), text: (await page.locator('body').innerText()).slice(0, 300), failures }));
+await page.screenshot({ path: 'docs/browser-inspection.png', fullPage: true });
+await browser.close();

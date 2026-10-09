@@ -1,0 +1,31 @@
+{
+  "created": "2026-10-06",
+  "mode": "built-in image_gen.imagegen",
+  "purpose": "Gallery template examples only; not actual user generation records.",
+  "assets": [
+    {
+      "id": "A",
+      "filename": "lumina-cobalt-perfume.png",
+      "prompt": "Use case: product-mockup\nAsset type: square gallery template image for an AI image generation product\nPrimary request: premium editorial product photograph of a translucent cobalt blue perfume glass bottle on a geometric pale mint pedestal against a deep cobalt blue studio backdrop.\nStyle/medium: photorealistic premium editorial product photography.\nComposition/framing: square 1:1 image, sculptural composition.\nLighting/mood: hard sunlight with glass caustics.\nMaterials/textures: translucent cobalt glass and a clean pale mint geometric pedestal.\nConstraints: no logos, no text, no watermark.",
+      "sourcePath": "C:\\Users\\ASUS\\.codex\\generated_images\\01a111c3-99b3-77b2-90a8-4bf42ef656e8\\exec-8ab6fabb-13c8-467a-9f53-3629b5747605.png",
+      "finalPath": "E:\\codex\\lumina-assets\\lumina-cobalt-perfume.png",
+      "provenance": "Built-in image_gen.imagegen; one original generation request; gallery template example."
+    },
+    {
+      "id": "B",
+      "filename": "lumina-ringed-planet.png",
+      "prompt": "Use case: stylized-concept\nAsset type: square gallery template image for an AI image generation product\nPrimary request: cinematic surreal photoreal scene of a tiny solitary explorer in an orange spacesuit standing on sweeping terracotta desert dunes under an immense pink ringed planet.\nScene/backdrop: terracotta dunes beneath a cyan atmospheric dawn sky.\nStyle/medium: cinematic surreal photorealism with an artistic magazine composition.\nComposition/framing: square 1:1 image; show the tiny solitary explorer and the immense scale of the ringed planet.\nConstraints: no text, no watermark.",
+      "sourcePath": "C:\\Users\\ASUS\\.codex\\generated_images\\01a111c3-99b3-77b2-90a8-4bf42ef656e8\\exec-098bf19c-4fdc-47dd-8912-b97b17109f51.png",
+      "finalPath": "E:\\codex\\lumina-assets\\lumina-ringed-planet.png",
+      "provenance": "Built-in image_gen.imagegen; one original generation request; gallery template example."
+    },
+    {
+      "id": "C",
+      "filename": "lumina-concrete-pavilion.png",
+      "prompt": "Use case: photorealistic-natural\nAsset type: square gallery template image for an AI image generation product\nPrimary request: editorial minimal contemporary concrete architecture pavilion with an immense circular opening framing green tropical trees and calm water.\nStyle/medium: cinematic analog architectural photography.\nComposition/framing: square 1:1 image; an editorial minimal composition emphasizing the immense circular opening.\nLighting/mood: sunlight with lime green accents.\nMaterials/textures: beige concrete, tropical greenery, calm water.\nConstraints: no text, no watermark.",
+      "sourcePath": "C:\\Users\\ASUS\\.codex\\generated_images\\01a111c3-99b3-77b2-90a8-4bf42ef656e8\\exec-7d308f09-543a-4148-b9f9-b8c875fa7780.png",
+      "finalPath": "E:\\codex\\lumina-assets\\lumina-concrete-pavilion.png",
+      "provenance": "Built-in image_gen.imagegen; one original generation request; gallery template example."
+    }
+  ]
+}

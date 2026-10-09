@@ -1,0 +1,17 @@
+node_modules
+.venv
+.env
+.env.*
+data
+dist
+.git
+__pycache__
+.pytest_cache
+.coverage
+htmlcov
+test-results
+playwright-report
+*.egg-info
+docs
+e2e
+tests

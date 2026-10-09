@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: lumina-ai-studio
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    healthCheckPath: /api/health
+    numInstances: 1
+    maxShutdownDelaySeconds: 90
+    disk:
+      name: lumina-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: "8090"
+      - key: DATA_DIR
+        value: /app/data
+      - key: APP_ORIGINS
+        fromService:
+          type: web
+          name: lumina-ai-studio
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: REGISTRATION_ENABLED
+        value: "true"
+      - key: WORKER_CONCURRENCY
+        value: "1"

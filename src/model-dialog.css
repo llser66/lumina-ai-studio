@@ -1,0 +1,40 @@
+dialog.model-dialog{color:#edf0f4;margin:auto;max-width:calc(100vw - 34px);width:480px}
+dialog.model-dialog::backdrop{background:#090c10bb;backdrop-filter:blur(6px)}
+.workspace-help{margin-top:34px;border-top:1px solid #303741;padding-top:20px}
+.workspace-help>summary{color:#a5b298;font-size:.875rem;cursor:pointer;padding:8px 0 18px}
+.model-dialog label>input:focus-visible,.model-dialog label>select:focus-visible{outline:2px solid #d5fa62;outline-offset:3px}
+dialog.model-dialog{width:590px;max-width:calc(100vw - 34px);padding:30px;max-height:calc(100dvh - 40px)}
+.model-dialog-intro{color:#9aa8b7;font-size:.875rem;line-height:1.7;margin:-7px 0 18px}
+.model-dialog .auth-brand{width:43px;height:43px;margin-bottom:22px}
+.model-dialog .eyebrow{margin-bottom:12px}
+.model-dialog .connection-method-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:0;margin:20px 0 22px}
+.model-dialog .connection-method-tabs button{justify-content:center;border-radius:0;padding:13px 4px;border:0;border-bottom:2px solid transparent;font-size:.875rem;white-space:nowrap}
+.model-dialog .connection-method-tabs button.selected{background:transparent;color:#d5fa62;border-bottom-color:#d5fa62}
+.model-dialog .connection-method-tabs button:disabled{opacity:.55;cursor:default}
+.model-dialog .connection-method-tabs button:disabled.selected{opacity:.85}
+.model-dialog button:focus-visible,.model-dialog select:focus-visible,.model-dialog input:focus-visible,.model-dialog a:focus-visible{outline:2px solid #d5fa62;outline-offset:3px}
+.model-dialog #model-connection-panel{min-width:0}
+.model-dialog .dialog-label-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:22px}
+.model-dialog .dialog-label-row>label{margin:0;flex-shrink:0}
+.model-dialog .dialog-label-row>span{font-size:.75rem;color:#929dab;text-align:right;line-height:1.6}
+.model-dialog select{white-space:nowrap;text-overflow:ellipsis;min-width:0}
+.model-dialog .setting-footnote{font-size:.75rem;line-height:1.8;color:#94a1ae;margin:10px 0 0;overflow-wrap:anywhere}
+.subscription-note{display:flex;gap:12px;border:1px solid #435037;background:#252e20;border-radius:10px;padding:17px;margin-top:22px}
+.subscription-note>svg{color:#b9dc91;flex-shrink:0;margin-top:1px}
+.subscription-note strong{font-size:.875rem;font-weight:500;color:#d6e4c0}
+.subscription-note p{font-size:.75rem;line-height:1.8;color:#a3b09c;margin-top:7px}
+.custom-model-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.model-dialog .custom-vision-toggle{display:flex;align-items:center;gap:9px;line-height:1.6}
+.model-dialog .custom-vision-toggle input{width:16px;height:16px;padding:0;margin:0;flex-shrink:0;accent-color:#d5fa62}
+.model-dialog .oauth-state>svg{flex-shrink:0}
+.model-dialog .oauth-state>div{min-width:0;overflow-wrap:anywhere}
+.model-dialog .oauth-state small{display:block;font-size:.75rem;color:#9eacbd;margin-top:7px}
+.oauth-session-note{display:flex;gap:8px;align-items:flex-start;color:#adbca4;line-height:1.8;font-size:.75rem;margin-top:12px}
+.oauth-session-note>svg{flex-shrink:0;margin-top:4px}
+.model-dialog .oauth-open-link{margin:16px 0 0;text-decoration:none;display:flex;width:fit-content;max-width:100%;line-height:1.6}
+.model-dialog .oauth-manual-form{margin-top:20px;padding:0 17px 17px;border:1px solid #3a454f;border-radius:10px;background:#171d23}
+.model-dialog .oauth-manual-form label{margin-top:16px}
+.model-dialog .oauth-manual-form input{min-width:0}
+.model-dialog .oauth-complete-actions{display:grid;gap:12px;margin-top:20px}
+.model-dialog .oauth-complete-actions>.secondary-button{justify-content:center}
+@media(max-width:650px){dialog.model-dialog{padding:25px 20px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px)}.model-dialog .connection-method-tabs button{font-size:.8125rem}.model-dialog .dialog-label-row{gap:8px}.model-dialog .dialog-label-row>span{font-size:.6875rem}.custom-model-fields{grid-template-columns:1fr;gap:0}.model-dialog .oauth-manual-form{padding:0 12px 14px}.model-dialog h2{font-size:1.3rem}}

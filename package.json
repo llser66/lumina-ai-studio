@@ -1,0 +1,29 @@
+{
+  "name": "lumina-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "build:preview": "tsc --noEmit && vite build --mode demo --outDir dist-preview",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "test:e2e": "playwright test",
+    "test:bridge": "node --test bridge/*.test.mjs",
+    "models:catalog": "node bridge/catalog.mjs"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "1.0.4",
+    "lucide-react": "^1.31.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.3"
+  }
+}

@@ -1,0 +1,18 @@
+services:
+  studio:
+    build: .
+    ports:
+      - "127.0.0.1:8090:8090"
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+    volumes:
+      - lumina-data:/app/data
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+volumes:
+  lumina-data:
