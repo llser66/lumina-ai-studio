@@ -2,19 +2,27 @@ services:
   - type: web
     name: lumina-ai-studio
     runtime: docker
-    plan: 0.5c-512mb
+    plan: free
     region: singapore
     healthCheckPath: /api/health
     numInstances: 1
-    disk:
-      name: lumina-data
-      mountPath: /app/data
-      sizeGB: 1
     envVars:
       - key: PORT
         value: "8090"
       - key: DATA_DIR
         value: /app/data
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: lumina-assets
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        generateValue: true
+      - key: MODEL_DEVICE_ID
+        generateValue: true
       - key: APP_ORIGINS
         fromService:
           type: web
@@ -26,3 +34,5 @@ services:
         value: "true"
       - key: WORKER_CONCURRENCY
         value: "1"
+      - key: GLOBAL_DAILY_GENERATION_LIMIT
+        value: "12"

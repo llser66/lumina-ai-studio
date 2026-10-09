@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import sqlite3
 import time
 import uuid
@@ -9,6 +10,26 @@ from pathlib import Path
 
 TERMINAL = {"succeeded", "failed", "cancelled", "uncertain"}
 ACTIVE = {"validating", "enhancing", "moderating", "generating", "saving"}
+POSTGRES_LOCK_ID = 6_503_105_007_401_002
+
+
+def postgres_sql(sql):
+    """Translate the small SQLite SQL subset used by the app to PostgreSQL syntax."""
+    translated = sql.strip()
+    ignored_insert = re.match(r"^INSERT\s+OR\s+IGNORE\s+", translated, flags=re.IGNORECASE)
+    if ignored_insert:
+        translated = "INSERT " + translated[ignored_insert.end() :]
+        if not re.search(r"\sON\s+CONFLICT\b", translated, flags=re.IGNORECASE):
+            translated += " ON CONFLICT DO NOTHING"
+    return translated.replace("?", "%s")
+
+
+class _PostgresConnection:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def execute(self, sql, args=()):
+        return self.connection.execute(postgres_sql(sql), args)
 
 
 class Conflict(Exception):
@@ -26,9 +47,25 @@ class GlobalQuotaExceeded(Exception):
 class Database:
     """A transactional single-node queue. Quota reservation and enqueue are atomic."""
 
-    def __init__(self, path: Path):
-        self.path = path
-        path.parent.mkdir(parents=True, exist_ok=True)
+    def __init__(self, path: Path | str):
+        raw_path = str(path)
+        self.is_postgres = raw_path.startswith(("postgres://", "postgresql://"))
+        self.path = raw_path if self.is_postgres else Path(path)
+        self.integrity_errors = (sqlite3.IntegrityError,)
+        self.database_errors = (sqlite3.Error,)
+        if self.is_postgres:
+            try:
+                import psycopg
+                from psycopg.rows import dict_row
+            except ImportError as exc:
+                raise RuntimeError("PostgreSQL mode requires psycopg 3") from exc
+            self._psycopg = psycopg
+            self._dict_row = dict_row
+            self.integrity_errors = (psycopg.IntegrityError,)
+            self.database_errors = (psycopg.Error,)
+            self._initialize_postgres()
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
@@ -44,8 +81,46 @@ class Database:
                     migration = Path(__file__).parent / "migrations" / filename
                     connection.executescript(migration.read_text(encoding="utf-8"))
 
+    def _initialize_postgres(self):
+        migration = Path(__file__).parent / "migrations" / "postgres" / "001_initial.sql"
+        with self.connect(write=True) as connection:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS lumina_schema_migrations "
+                "(version INTEGER PRIMARY KEY, applied_at DOUBLE PRECISION NOT NULL)"
+            )
+            version = connection.execute(
+                "SELECT version FROM lumina_schema_migrations ORDER BY version DESC LIMIT 1"
+            ).fetchone()
+            if version and version["version"] >= 1:
+                return
+            for statement in migration.read_text(encoding="utf-8").split(";"):
+                if statement.strip():
+                    connection.execute(statement)
+            connection.execute(
+                "INSERT INTO lumina_schema_migrations(version,applied_at) VALUES(1,?)",
+                (time.time(),),
+            )
+
     @contextmanager
     def connect(self, *, write=False):
+        if self.is_postgres:
+            connection = self._psycopg.connect(
+                self.path, autocommit=True, row_factory=self._dict_row
+            )
+            try:
+                if write:
+                    connection.execute("BEGIN")
+                    connection.execute("SELECT pg_advisory_xact_lock(%s)", (POSTGRES_LOCK_ID,))
+                yield _PostgresConnection(connection)
+                if write:
+                    connection.execute("COMMIT")
+            except BaseException:
+                if write:
+                    connection.execute("ROLLBACK")
+                raise
+            finally:
+                connection.close()
+            return
         connection = sqlite3.connect(self.path, timeout=15, isolation_level=None)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys=ON")
@@ -110,15 +185,15 @@ class Database:
                     raise Conflict("同一个请求编号不能用于不同的创作参数")
                 return dict(existing), False
             used = connection.execute(
-                "SELECT COUNT(*) FROM jobs WHERE user_id=? AND created_at>=? AND status NOT IN ('failed','cancelled')",
+                "SELECT COUNT(*) AS count FROM jobs WHERE user_id=? AND created_at>=? AND status NOT IN ('failed','cancelled')",
                 (user_id, self.day_start()),
-            ).fetchone()[0]
+            ).fetchone()["count"]
             if used >= limit:
                 raise QuotaExceeded()
             global_used = connection.execute(
-                "SELECT COUNT(*) FROM jobs WHERE created_at>=? AND status NOT IN ('failed','cancelled')",
+                "SELECT COUNT(*) AS count FROM jobs WHERE created_at>=? AND status NOT IN ('failed','cancelled')",
                 (self.day_start(),),
-            ).fetchone()[0]
+            ).fetchone()["count"]
             if global_used >= global_limit:
                 raise GlobalQuotaExceeded()
             # Validate ownership in the same transaction as enqueue.
@@ -281,12 +356,16 @@ class Database:
                 (job_id, "succeeded", "作品已保存，可以下载原图", now),
             )
 
-    def recover_expired(self, outputs: Path):
+    def recover_expired(self, outputs):
         for job in self.all(
             "SELECT * FROM jobs WHERE status NOT IN ('queued','succeeded','failed','cancelled','uncertain') AND lease_until<?",
             (time.time(),),
         ):
-            if (outputs / f"{job['id']}.png").exists() or not job["provider_started_at"]:
+            if hasattr(outputs, "output_key"):
+                output_exists = outputs.exists(outputs.output_key(job["user_id"], job["id"]))
+            else:
+                output_exists = (outputs / f"{job['id']}.png").exists()
+            if output_exists or not job["provider_started_at"]:
                 self.recover(job["id"])
             else:
                 self.fail(

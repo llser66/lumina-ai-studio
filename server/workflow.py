@@ -1,4 +1,5 @@
 import asyncio
+import io
 import logging
 import os
 import time
@@ -8,6 +9,7 @@ from typing import TypedDict
 from langgraph.graph import END, START, StateGraph
 from PIL import Image
 
+from server.asset_store import LocalAssetStore
 from server.provider import ProviderFailure
 from server.schemas import GenerationSpec
 
@@ -37,8 +39,10 @@ def atomic_write(path: Path, content: bytes):
     os.replace(temporary, path)
 
 
-def build_graph(db, provider, outputs, checkpointer):
+def build_graph(db, provider, outputs, checkpointer, asset_store=None):
     """Checkpoints contain references and prompts; image bytes never enter graph state."""
+    asset_store = asset_store or LocalAssetStore(outputs.parent)
+    outputs.mkdir(parents=True, exist_ok=True)
 
     def job(state):
         return db.one("SELECT * FROM jobs WHERE id=?", (state["job_id"],))
@@ -77,23 +81,24 @@ def build_graph(db, provider, outputs, checkpointer):
 
     async def generate(state):
         row = job(state)
-        path = outputs / f"{row['id']}.png"
-        if path.exists():
-            # A crash after durable file save must never trigger another API call.
-            return {"output_path": str(path)}
+        path = asset_store.output_key(row["user_id"], row["id"])
+        if asset_store.exists(path):
+            # A crash after durable object storage must never trigger another API call.
+            return {"output_path": path}
         if row["provider_started_at"]:
             raise ProviderFailure(
                 "provider_unknown", "供应商结果待确认，此任务不会自动重试。", uncertain=True
             )
         reference = None
+        remove_reference = False
         if row["reference_id"]:
             asset = db.one(
                 "SELECT * FROM assets WHERE id=? AND user_id=?",
                 (row["reference_id"], row["user_id"]),
             )
-            if not asset or not Path(asset["path"]).is_file():
+            if not asset or not asset_store.exists(asset["path"]):
                 raise ProviderFailure("reference_missing", "参考图片已不可用，请重新上传。")
-            reference = Path(asset["path"])
+            reference, remove_reference = asset_store.materialize(asset["path"], outputs)
         spec = GenerationSpec(**{key: row[key] for key in GenerationSpec.model_fields})
         stage(
             state,
@@ -101,16 +106,19 @@ def build_graph(db, provider, outputs, checkpointer):
             "正在生成画面，这可能需要一至三分钟",
             provider_started_at=time.time(),
         )
-        result = await selected_provider(state).generate(
-            spec, state["effective_prompt"], reference, row["model"]
-        )
-        await asyncio.to_thread(atomic_write, path, result.content)
+        try:
+            result = await selected_provider(state).generate(
+                spec, state["effective_prompt"], reference, row["model"]
+            )
+            await asyncio.to_thread(asset_store.put, path, result.content)
+        finally:
+            asset_store.cleanup_materialized(reference, remove_reference)
         stage(state, "saving", "原图已安全保存", provider_request_id=result.request_id)
-        return {"output_path": str(path)}
+        return {"output_path": path}
 
     async def persist(state):
         stage(state, "saving", "正在归档创作参数与原图")
-        with Image.open(state["output_path"]) as image:
+        with Image.open(io.BytesIO(asset_store.read(state["output_path"]))) as image:
             width, height = image.size
         db.complete(state["job_id"], state["output_path"], width, height)
         return {}

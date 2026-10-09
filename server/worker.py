@@ -1,8 +1,12 @@
 import asyncio
 import contextlib
+import io
 import logging
 import uuid
 
+from PIL import Image
+
+from server.asset_store import LocalAssetStore
 from server.db import TERMINAL
 from server.provider import ProviderFailure
 
@@ -10,8 +14,9 @@ logger = logging.getLogger("lumina.worker")
 
 
 class Worker:
-    def __init__(self, db, graph, outputs, provider=None):
+    def __init__(self, db, graph, outputs, provider=None, asset_store=None):
         self.db, self.graph, self.outputs = db, graph, outputs
+        self.asset_store = asset_store or LocalAssetStore(outputs.parent)
         self.owner = str(uuid.uuid4())
         self.provider = provider
 
@@ -29,9 +34,7 @@ class Worker:
                 if snapshot.next:
                     await self.graph.ainvoke(None, config, durability="sync")
                 elif snapshot.values.get("output_path"):
-                    from PIL import Image
-
-                    with Image.open(snapshot.values["output_path"]) as image:
+                    with Image.open(io.BytesIO(self.asset_store.read(snapshot.values["output_path"]))) as image:
                         self.db.complete(job["id"], snapshot.values["output_path"], *image.size)
             else:
                 await self.graph.ainvoke({"job_id": job["id"]}, config, durability="sync")
@@ -44,7 +47,8 @@ class Worker:
         except Exception as exc:
             row = self.db.one("SELECT * FROM jobs WHERE id=?", (job["id"],))
             if row["status"] not in TERMINAL:
-                if (self.outputs / f"{job['id']}.png").exists():
+                output_key = self.asset_store.output_key(job["user_id"], job["id"])
+                if self.asset_store.exists(output_key):
                     self.db.recover(job["id"])
                 else:
                     self.db.fail(
@@ -64,9 +68,17 @@ class Worker:
 
     async def run(self):
         while True:
-            self.db.recover_expired(self.outputs)
-            job = self.db.claim(self.owner)
+            try:
+                self.db.recover_expired(self.asset_store)
+                job = self.db.claim(self.owner)
+            except Exception as exc:
+                logger.error("worker storage unavailable exception_type=%s", type(exc).__name__)
+                await asyncio.sleep(2)
+                continue
             if job:
-                await self.process(job)
+                try:
+                    await self.process(job)
+                except Exception as exc:
+                    logger.error("worker job recovery exception_type=%s", type(exc).__name__)
             else:
                 await asyncio.sleep(0.5)

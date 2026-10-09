@@ -1,7 +1,5 @@
 import base64
-import sqlite3
 import time
-from pathlib import Path
 
 from pydantic import SecretStr
 
@@ -90,9 +88,9 @@ class JobProvider:
                 "SELECT * FROM assets WHERE id=? AND user_id=?",
                 (self.row["reference_id"], self.row["user_id"]),
             )
-            if not asset or not Path(asset["path"]).is_file():
+            if not asset or not self.service.asset_store.exists(asset["path"]):
                 raise ProviderFailure("reference_missing", "参考图片已不可用，请重新上传。")
-            reference = base64.b64encode(Path(asset["path"]).read_bytes()).decode()
+            reference = base64.b64encode(self.service.asset_store.read(asset["path"])).decode()
         result = checked(
             await self.service.bridge.request(
                 "enhance",
@@ -165,7 +163,7 @@ class JobProvider:
                             connection["version"],
                         ),
                     )
-                except sqlite3.Error:
+                except self.service.db.database_errors:
                     pass  # Preserve the provider failure if status storage is unavailable.
             if exc.code in {"bridge_unavailable", "bridge_timeout"}:
                 raise ProviderFailure(

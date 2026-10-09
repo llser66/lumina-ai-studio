@@ -1,6 +1,6 @@
 # Lumina 映造
 
-面向商业素材制作与个人创作者的全栈 AI 生图应用。React + TypeScript 提供创作工作台，FastAPI 管理业务，Python LangGraph 编排持久化生成 / 编辑流程，SQLite 保存账号与任务，私有原图保存在服务端持久化目录。
+面向商业素材制作与个人创作者的全栈 AI 生图应用。React + TypeScript 提供创作工作台，FastAPI 管理业务，Python LangGraph 编排生成 / 编辑流程。本地开发默认用 SQLite 和本机文件；免费公网体验配置使用 PostgreSQL 检查点与私有对象存储，避免 Render 免费实例休眠或重启后丢失数据。
 
 ![Lumina desktop](docs/screenshot-desktop.png)
 
@@ -11,7 +11,7 @@
 - 真实任务进度与时间线，刷新页面仍保留记录。
 - Cookie 登录、CSRF、个人图片归属检查、上传验证与限流。
 - 原子预留账号 / 全站每日额度，请求幂等，结果不明时停止自动重试。
-- LangGraph SQLite 检查点、心跳租约、原图原子保存、最多两次归档恢复。
+- LangGraph 持久化检查点、心跳租约、原图原子保存、最多两次归档恢复；本地使用 SQLite，公网可用 PostgreSQL。
 
 运行入口直接调用 OpenAI Images / Responses / Moderations API，没有模拟生成开关。首页三张图片标为“灵感示例”。测试供应商替身只在隔离的测试服务中使用。
 
@@ -87,19 +87,25 @@ npm audit --audit-level=high
 
 Windows 使用已安装的 Edge，Linux CI 使用 Playwright Chromium。测试数据库独立且临时；测试服务强制空 API 密钥，绝不访问付费模型。HTTP MockTransport 检查真实 OpenAI SDK 请求格式与异常行为。
 
+## 零月费体验版
+
+`render.yaml` 采用 Render 免费 Docker Web Service + Supabase 免费 PostgreSQL / 私有 Storage。首次访问或空闲 15 分钟后再次访问时，Render 可能需要约一分钟启动；Supabase 免费项目若一周没有足够活动可能暂停。免费额度和规则以供应商当前页面为准，适合简历演示与小规模体验，不应当作稳定生产承诺。
+
+线上访客注册后填写自己的模型 API Key；密钥只发到 Lumina 服务端并加密保存。Lumina 不替用户付模型调用费；用户仍按其模型供应商的价格付费。请按照[公网体验部署步骤](docs/DEPLOYMENT.md#零月费公网体验)配置 Supabase 与 Render 环境变量。不要公开 Supabase service-role key 或 Fernet 加密密钥。
+
 ## 部署与边界
 
 ~~~powershell
 docker compose up --build -d
 ~~~
 
-Docker 配置含非 root 用户、健康检查与持久化卷。此版本是单实例部署：一个 Uvicorn 进程与异步工作池；不适用于丢失本地磁盘的无状态函数。公网应设置真实 APP_ORIGINS 与 COOKIE_SECURE=true，并使用 HTTPS 反向代理。
+Docker 配置含非 root 用户和健康检查。此版本是单实例部署：一个 Uvicorn 进程与异步工作池；免费公网实例的本机磁盘只用于临时文件，账号、任务和图片分别写入 PostgreSQL 与私有对象存储。公网应设置真实 APP_ORIGINS 与 COOKIE_SECURE=true，并使用 HTTPS。
 
 额度按 UTC 日历日恢复，界面转为浏览器本地时间；生成次数不等于货币预算，供应商账户仍应设置消费预算。不同画质和描述优化的费用不同。
 
 原始描述、优化描述、参考图与原图保存在本机 / 服务器，并在生成时发往配置的模型服务。“移出作品库”是软删除，不承诺永久擦除。当前没有邮箱验证、密码找回、支付、团队协作、多实例基础设施或自动存储回收。
 
-API Key 与 OAuth 凭证通过账户绑定的 Fernet 加密保存。data/credentials.key 必须保护并与数据一起备份，丢失后无法解密已有连接；列出连接不会解密、回显完整凭证或刷新账号授权。真实订阅权限仍需你本人完成供应商授权并验证。
+API Key 与 OAuth 凭证通过账户绑定的 Fernet 加密保存。本地使用 data/credentials.key；公网版本使用 Render 上稳定的 CREDENTIAL_ENCRYPTION_KEY。丢失或更换该密钥后，已有模型连接无法解密；列出连接不会解密、回显完整凭证或刷新账号授权。真实订阅权限仍需你本人完成供应商授权并验证。
 
 源码与隔离业务链路已提供；真实模型生成需要配置密钥后单独验收，尚未发布公网或宣称生产用户。Docker 运行结果以部署验收为准。
 

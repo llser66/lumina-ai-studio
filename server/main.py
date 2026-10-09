@@ -2,11 +2,10 @@ import asyncio
 import json
 import logging
 import mimetypes
-import sqlite3
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -15,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from filelock import FileLock
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
+from server.asset_store import create_asset_store
 from server.config import ROOT, Settings
 from server.db import TERMINAL, Conflict, Database, GlobalQuotaExceeded, QuotaExceeded
 from server.middleware import BodyLimitMiddleware
@@ -34,7 +34,7 @@ from server.security import (
     rate_limit,
 )
 from server.worker import Worker
-from server.workflow import atomic_write, build_graph
+from server.workflow import build_graph
 
 logger = logging.getLogger("lumina.api")
 # Windows registry associations can map .js to text/plain. Module scripts require
@@ -83,33 +83,45 @@ def serialize_job(db, job):
 
 def create_app(settings=None, *, start_worker=True, provider=None, bridge=None):
     settings = settings or Settings()
+    database_url = settings.database_url.get_secret_value().strip()
+    if os.environ.get("RENDER_EXTERNAL_URL") and not database_url:
+        raise RuntimeError("Render deployment requires DATABASE_URL; local SQLite is not persistent")
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     outputs = settings.data_dir / "outputs"
-    uploads = settings.data_dir / "uploads"
     outputs.mkdir(exist_ok=True)
-    uploads.mkdir(exist_ok=True)
-    db = Database(settings.data_dir / "lumina.sqlite3")
-    models = ModelService(db, settings, bridge or PiBridge())
+    if database_url and not settings.credential_encryption_key.get_secret_value().strip():
+        raise RuntimeError("CREDENTIAL_ENCRYPTION_KEY is required for PostgreSQL deployments")
+    assets = create_asset_store(settings)
+    db = Database(database_url or settings.data_dir / "lumina.sqlite3")
+    models = ModelService(db, settings, bridge or PiBridge(), assets)
 
     @asynccontextmanager
     async def lifespan(app):
         processes = []
         lock = FileLock(settings.data_dir / "worker.lock")
         instance = provider
-        async with AsyncSqliteSaver.from_conn_string(
-            str(settings.data_dir / "checkpoints.sqlite3")
-        ) as saver:
+        if db.is_postgres:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+            saver_context = AsyncPostgresSaver.from_conn_string(db.path)
+        else:
+            saver_context = AsyncSqliteSaver.from_conn_string(
+                str(settings.data_dir / "checkpoints.sqlite3")
+            )
+        async with saver_context as saver:
             await saver.setup()
             try:
                 if start_worker:
                     # This deployment intentionally runs one API process with an async pool.
                     lock.acquire(timeout=0)
                     instance = ModelRouter(models, settings, fallback=provider)
-                    graph = build_graph(db, instance, outputs, saver)
+                    graph = build_graph(db, instance, outputs, saver, assets)
                     app.state.graph = graph
                     for _ in range(settings.worker_concurrency):
                         processes.append(
-                            asyncio.create_task(Worker(db, graph, outputs, instance).run())
+                            asyncio.create_task(
+                                Worker(db, graph, outputs, instance, assets).run()
+                            )
                         )
                 app.state.provider_ready = bool(settings.ready or provider)
                 yield
@@ -120,6 +132,8 @@ def create_app(settings=None, *, start_worker=True, provider=None, bridge=None):
                 if instance and hasattr(instance, "close"):
                     await instance.close()
                 await models.close()
+                if hasattr(assets, "close"):
+                    assets.close()
                 if lock.is_locked:
                     lock.release()
 
@@ -134,6 +148,7 @@ def create_app(settings=None, *, start_worker=True, provider=None, bridge=None):
     app.state.db = db
     app.state.settings = settings
     app.state.models = models
+    app.state.assets = assets
     app.state.provider_ready = bool(settings.ready or provider)
     app.add_middleware(BodyLimitMiddleware)
     app.include_router(model_routes)
@@ -196,7 +211,7 @@ def create_app(settings=None, *, start_worker=True, provider=None, bridge=None):
                 "INSERT INTO users(id,email,name,password_hash,created_at) VALUES(?,?,?,?,?)",
                 (user_id, str(body.email).lower(), body.name, password_hash, time.time()),
             )
-        except sqlite3.IntegrityError as exc:
+        except db.integrity_errors as exc:
             raise HTTPException(409, "注册未完成，请尝试登录或更换邮箱") from exc
         csrf = issue_session(response, db, settings, user_id)
         return {
@@ -379,15 +394,14 @@ def create_app(settings=None, *, start_worker=True, provider=None, bridge=None):
         except ValueError as exc:
             raise HTTPException(422, "图片无法读取，或尺寸超过 4096 像素") from exc
         asset_id = str(uuid.uuid4())
-        path = uploads / f"{asset_id}.png"
-        await asyncio.to_thread(atomic_write, path, content)
+        path = await asyncio.to_thread(assets.upload, user["id"], asset_id, content)
         try:
             db.execute(
                 "INSERT INTO assets(id,user_id,path,width,height,created_at) VALUES(?,?,?,?,?,?)",
                 (asset_id, user["id"], str(path), width, height, time.time()),
             )
         except BaseException:
-            path.unlink(missing_ok=True)
+            await asyncio.to_thread(assets.delete, path)
             raise
         return {
             "id": asset_id,
@@ -402,13 +416,18 @@ def create_app(settings=None, *, start_worker=True, provider=None, bridge=None):
             "SELECT a.* FROM assets a LEFT JOIN jobs j ON j.id=a.job_id WHERE a.id=? AND a.user_id=? AND (a.job_id IS NULL OR j.deleted_at IS NULL)",
             (str(asset_id), user["id"]),
         )
-        if not asset or not Path(asset["path"]).is_file():
+        if not asset or not assets.exists(asset["path"]):
             raise HTTPException(404, "图片不存在")
-        return FileResponse(
-            asset["path"],
+        content = assets.read(asset["path"])
+        disposition = "attachment" if download else "inline"
+        return Response(
+            content,
             media_type="image/png",
-            filename=f"lumina-{asset_id}.png",
-            content_disposition_type="attachment" if download else "inline",
+            headers={
+                "Content-Disposition": f'{disposition}; filename="lumina-{asset_id}.png"',
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     dist = ROOT / "dist"

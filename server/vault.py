@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import json
 import os
 import time
@@ -12,8 +14,25 @@ from server.provider import ProviderFailure
 class CredentialVault:
     """Account-bound authenticated encryption. Public responses never decrypt keys."""
 
-    def __init__(self, db, data_dir: Path):
+    def __init__(self, db, data_dir: Path, encryption_key=None):
         self.db = db
+        if encryption_key:
+            key = (
+                encryption_key.get_secret_value()
+                if hasattr(encryption_key, "get_secret_value")
+                else str(encryption_key)
+            )
+            try:
+                self.cipher = Fernet(key.encode())
+            except (TypeError, ValueError):
+                derived = base64.urlsafe_b64encode(
+                    hashlib.sha256(b"lumina-credential-key-v1\0" + key.encode()).digest()
+                )
+                try:
+                    self.cipher = Fernet(derived)
+                except (TypeError, ValueError) as key_error:
+                    raise RuntimeError("CREDENTIAL_ENCRYPTION_KEY is invalid") from key_error
+            return
         key_path = data_dir / "credentials.key"
         try:
             descriptor = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

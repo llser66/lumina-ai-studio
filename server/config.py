@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     image_model: str = "gpt-image-2.5-sunburst"
     text_model: str = "gpt-5-mini"
     data_dir: Path = ROOT / "data"
+    database_url: SecretStr = SecretStr("")
+    supabase_url: str = ""
+    supabase_service_role_key: SecretStr = SecretStr("")
+    supabase_storage_bucket: str = "lumina-assets"
+    credential_encryption_key: SecretStr = SecretStr("")
+    model_device_id: str = ""
     daily_generation_limit: int = Field(default=20, ge=1, le=1000)
     global_daily_generation_limit: int = Field(default=200, ge=1, le=10000)
     worker_concurrency: int = Field(default=2, ge=1, le=4)
@@ -37,6 +43,22 @@ class Settings(BaseSettings):
         if not value.startswith("https://"):
             raise ValueError("Provider endpoints must use HTTPS")
         return value.rstrip("/")
+
+    @field_validator("supabase_url")
+    @classmethod
+    def secure_supabase(cls, value: str) -> str:
+        value = value.strip().rstrip("/")
+        if value and not value.startswith("https://"):
+            raise ValueError("Supabase must use HTTPS")
+        return value
+
+    @field_validator("database_url")
+    @classmethod
+    def postgres_database_url(cls, value: SecretStr) -> SecretStr:
+        url = value.get_secret_value().strip()
+        if url and not url.startswith(("postgres://", "postgresql://")):
+            raise ValueError("DATABASE_URL must be a PostgreSQL connection URL")
+        return SecretStr(url)
 
     @property
     def ready(self) -> bool:

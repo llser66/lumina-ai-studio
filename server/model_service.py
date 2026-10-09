@@ -56,17 +56,23 @@ OAUTH_STAGES = {
 
 
 class ModelService:
-    def __init__(self, db, settings, bridge):
+    def __init__(self, db, settings, bridge, asset_store=None):
         self.db, self.settings, self.bridge = db, settings, bridge
-        self.vault = CredentialVault(db, settings.data_dir)
+        self.asset_store = asset_store
+        encryption_key = settings.credential_encryption_key.get_secret_value().strip()
+        if db.is_postgres and not encryption_key:
+            raise RuntimeError("CREDENTIAL_ENCRYPTION_KEY is required for PostgreSQL deployments")
+        self.vault = CredentialVault(db, settings.data_dir, encryption_key or None)
         self.catalog = json.loads((ROOT / "bridge" / "catalog.json").read_text(encoding="utf-8"))
         self.providers = {provider["id"]: provider for provider in self.catalog["providers"]}
         self.flows = {}
         self.bridge.on_event = self.on_event
-        device = settings.data_dir / "model-device-id"
-        if not device.exists():
-            device.write_text(str(uuid.uuid4()), encoding="utf-8")
-        self.device_id = device.read_text(encoding="utf-8").strip()
+        self.device_id = settings.model_device_id.strip()
+        if not self.device_id:
+            device = settings.data_dir / "model-device-id"
+            if not device.exists():
+                device.write_text(str(uuid.uuid4()), encoding="utf-8")
+            self.device_id = device.read_text(encoding="utf-8").strip()
 
     def owned(self, connection_id, user_id):
         row = self.vault.owned(connection_id, user_id)

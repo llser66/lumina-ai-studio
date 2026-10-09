@@ -5,22 +5,26 @@ import time
 import uuid
 from pathlib import Path
 
+from server.asset_store import create_asset_store
 from server.config import Settings
 from server.db import Database
 from server.provider import normalize_image
-from server.workflow import atomic_write
 
 
 def settle(settings, job_id, note, *, image=None, confirmed_no_image=False):
-    db = Database(settings.data_dir / "lumina.sqlite3")
+    db = Database(
+        settings.database_url.get_secret_value().strip()
+        or settings.data_dir / "lumina.sqlite3"
+    )
+    assets = create_asset_store(settings)
     job_id = str(uuid.UUID(job_id))
     job = db.one("SELECT * FROM jobs WHERE id=?", (job_id,))
     if not job or job["status"] != "uncertain":
         raise ValueError("Only uncertain jobs can be reconciled")
     if image:
         content, width, height = normalize_image(Path(image).read_bytes())
-        output = settings.data_dir / "outputs" / (job_id + ".png")
-        atomic_write(output, content)
+        output = assets.output_key(job["user_id"], job_id)
+        assets.put(output, content)
         db.complete(job_id, output, width, height)
     elif confirmed_no_image:
         db.fail(
@@ -32,6 +36,8 @@ def settle(settings, job_id, note, *, image=None, confirmed_no_image=False):
         "INSERT INTO events(job_id,stage,message,created_at) VALUES(?,?,?,?)",
         (job_id, "reconciled", "管理员核对记录：" + note[:200], time.time()),
     )
+    if hasattr(assets, "close"):
+        assets.close()
 
 
 def main():

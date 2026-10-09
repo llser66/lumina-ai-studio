@@ -10,15 +10,15 @@ Netlify 使用 `netlify.toml` 构建 `dist-preview/`。该构建会启用静态�
 
 ## 支持的形态
 
-单实例 Python 服务、持久化磁盘、同源 HTTPS，并需要 Node.js 24 执行 pi-ai 私有桥接。一个 Uvicorn 进程，默认两个工作协程，不可使用多个 workers 指向同一个目录。单纯发布前端不能运行 Python 工作流。Dockerfile 已包含 Node 运行时和生产 npm 依赖。
+单实例 Python 服务、同源 HTTPS，并需要 Node.js 24 执行 pi-ai 私有桥接。一个 Uvicorn 进程，默认两个工作协程，不可使用多个 workers 指向同一个目录。单纯发布前端不能运行 Python 工作流。Dockerfile 已包含 Node 运行时和生产 npm 依赖。
 
 部署规格需通过实际图片与并发测试确定。本版本没有宣称 QPS、P95 或内存保证。
 
 ## Docker
 
-复制 .env.example 为 .env，在本机填密钥，再运行 docker compose up --build -d。端口只绑定 127.0.0.1:8090，公网经 HTTPS 反向代理。
+复制 .env.example 为 .env，在本机填密钥，再运行 docker compose up --build -d。端口只绑定 127.0.0.1:8090，公网经 HTTPS 反向代理。没设置 DATABASE_URL 时，本机默认使用 SQLite 与本机图片目录。
 
-命名卷 lumina-data 保存 lumina.sqlite3、checkpoints.sqlite3、WAL、outputs/、uploads/、credentials.key 和稳定设备 ID。升级前整体备份，确认迁移；当前含 schema 1 → 2 → 3 → 4。不要删除卷处理普通故障，尤其不要丢失凭证加密密钥。
+命名卷 lumina-data 保存 SQLite、检查点、outputs/、uploads/、credentials.key 和稳定设备 ID。升级前整体备份，确认迁移；SQLite 当前含 schema 1 → 2 → 3 → 4。不要删除卷处理普通故障，尤其不要丢失凭证加密密钥。
 
 APP_ORIGINS=https://你的域名，COOKIE_SECURE=true。修改配置后重启。网页连接标记仅说明密钥存在，真实模型权限与余额仍需验收。
 
@@ -58,8 +58,16 @@ uncertain 先人工核对供应商记录。命令不访问供应商、不产生�
 
 模型配置与订阅授权操作见 MODEL_CONNECTIONS.md。本地回调在远程部署中可能需要手动粘贴最终地址；原生 SDK 授权回调端口不作为公网服务暴露。Cookie 会话、授权状态与主密钥都必须按私有数据保护。
 
-## Render 公网部署
+## 零月费公网体验
 
-根目录 `render.yaml` 定义单实例 Docker Web Service、`/app/data` 持久磁盘、健康检查与 HTTPS 会话配置。启动脚本会先修正数据盘根目录的所属用户，然后以 `lumina` 非 root 用户运行应用。先把源码推送到私有 GitHub 仓库，再让 Render 连接该仓库并创建服务。Render 会为 `APP_ORIGINS` 自动注入本服务的 `RENDER_EXTERNAL_URL`；不需要把本机 `.env` 或 API Key 上传到 GitHub。访客注册后需自行添加支持生图的模型连接，才能真实生图。
+这个体验方案把 Render 免费 Docker Web Service 作为应用，把 Supabase 免费 PostgreSQL 保存账号、任务与 LangGraph 检查点，并把图片放进**私有** Supabase Storage bucket。应用只通过后端访问图片，浏览器不能使用 service-role key 直接读取对象。
 
-该配置使用付费计算实例和持久磁盘。磁盘只能增大，不能缩小；同一磁盘只能供单实例使用。首次上线后验证 `/api/health`、注册、登录、模型连接、实际生图和图片持久化，再分享站点地址。`/app/data` 是唯一持久化路径，应按上文定期备份。
+1. 在 Supabase 创建免费项目，区域选择靠近 Render 的 Singapore。创建名为 `lumina-assets` 的 bucket，并确认 **Public bucket 关闭**。
+2. 在 Supabase 项目设置中复制 Project URL、`service_role` 密钥，以及数据库连接信息里的 **Session pooler** PostgreSQL URI。数据库密码须保存在密码管理器中；切勿发到聊天或提交到 GitHub。Render 免费实例没有持久磁盘，不要把连接串或图片写进 `/app/data`。
+3. 将代码推送到私有 GitHub 仓库，在 Render 用 Blueprint 连接仓库并创建服务。`render.yaml` 选择免费计划，并自动生成稳定的 `CREDENTIAL_ENCRYPTION_KEY`。
+4. 在 Render 的环境变量设置中填 `DATABASE_URL`、`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`。数据库连接用 Supabase **Session pooler** 连接串；bucket 名称保持 `lumina-assets`。不要将任何密钥放入 Git 仓库或前端变量。
+5. 部署后检查 `/api/health`，注册一个新账号，添加自己的图片模型 API Key，完成一次实际生图；之后重启或重新部署，再确认登录、历史任务和图片仍存在。新云数据库是空的，需要在公开站点重新注册账号。
+
+免费版的重要限制：Render 免费 Web Service 连续 15 分钟无访问后会休眠，恢复通常约一分钟；本机文件会在休眠、重启和部署时丢失，所以本配置已将业务数据放到云服务。Supabase 免费层当前提供 500 MB 数据库和 1 GB 文件存储；闲置一周可能暂停项目。额度、闲置策略和服务条款可能调整，体验中应限制分享范围并自行检查用量。该配置适合演示，不保证连续在线、备份或生产服务等级。
+
+访客使用自己的 API Key 时，生成费由对应模型供应商按其账号规则结算；Supabase / Render 的免费资源由站点所有者账户提供。若后续访问量或图片存储超出免费额度，服务可能暂停或需要付费升级。
