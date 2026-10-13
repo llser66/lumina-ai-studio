@@ -2,6 +2,8 @@
 
 面向商业素材制作与个人创作者的全栈 AI 生图应用。React + TypeScript 提供创作工作台，FastAPI 管理业务，Python LangGraph 编排生成 / 编辑流程。本地开发默认用 SQLite 和本机文件；免费公网体验配置使用 PostgreSQL 检查点与私有对象存储，避免 Render 免费实例休眠或重启后丢失数据。
 
+公网体验地址：[Lumina AI](https://lumina-ai-studio-cfgg.onrender.com)。这是一个 Render 免费实例，首次访问或空闲后唤醒可能需要等待；真实生图需要在“模型与订阅”中配置可用的模型凭证。
+
 ![Lumina desktop](docs/screenshot-desktop.png)
 
 ## 功能
@@ -107,7 +109,7 @@ Docker 配置含非 root 用户和健康检查。此版本是单实例部署：�
 
 API Key 与 OAuth 凭证通过账户绑定的 Fernet 加密保存。本地使用 data/credentials.key；公网版本使用 Render 上稳定的 CREDENTIAL_ENCRYPTION_KEY。丢失或更换该密钥后，已有模型连接无法解密；列出连接不会解密、回显完整凭证或刷新账号授权。真实订阅权限仍需你本人完成供应商授权并验证。
 
-源码与隔离业务链路已提供；真实模型生成需要配置密钥后单独验收，尚未发布公网或宣称生产用户。Docker 运行结果以部署验收为准。
+源码与隔离业务链路已提供；公网体验服务已经部署并通过首页与 `/api/health` 检查。真实模型生成仍需在页面连接可用凭证后单独验收；该部署面向简历演示和小规模体验，不提供生产级 SLA。
 
 ## 参考资料
 

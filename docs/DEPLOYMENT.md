@@ -1,5 +1,7 @@
 # 部署与运营
 
+当前公网体验服务已部署到 Render：[https://lumina-ai-studio-cfgg.onrender.com](https://lumina-ai-studio-cfgg.onrender.com)。部署使用私有 GitHub 仓库 `llser66/lumina-ai-studio` 的 `main` 分支、Docker Web Service、Supabase PostgreSQL 和私有 Storage。服务健康检查路径为 `/api/health`。
+
 ## Netlify 只读预览
 
 Netlify 使用 `netlify.toml` 构建 `dist-preview/`。该构建会启用静态演示页面：展示 Lumina 项目介绍与内置灵感示例，不发起登录、模型配置或生图 API 请求。它适合分享作品界面，不是完整可交互的线上应用。
