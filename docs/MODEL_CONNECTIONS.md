@@ -79,6 +79,7 @@ Node 子进程仅通过 stdin/stdout 私有 JSON 帧通信，不提供额外 HTT
 | POST /api/models/oauth/{id}/answer | 提交授权步骤输入 |
 | POST /api/models/oauth/{id}/callback | 将授权码或回调地址提交到该会话当前等待的手动步骤 |
 | POST /api/models/oauth/{id}/cancel | 取消授权 |
+| POST /api/models/oauth/reset | 清理当前账号残留的授权会话 |
 
 自定义地址与自定义 Qwen 工作空间地址只接受公开 HTTPS 主机；服务端每次调用前重新解析 DNS，将请求固定到已验证的公网 IP，保持原主机名用于 TLS 和 Host，并拒绝重定向。修改接口继续要求登录、X-Lumina-Client 和 CSRF。
 

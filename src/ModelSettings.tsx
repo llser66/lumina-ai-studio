@@ -120,6 +120,7 @@ export default function ModelSettings({ initial, loggedIn, onLogin, onUpdate, no
   const verificationUrl = pending && !exchanging ? safeExternalUrl(flow.verification_url) : undefined;
   const prompt = pending && !exchanging ? flow.prompt : undefined;
   const showManualInput = pending && !exchanging && (prompt?.type === 'manual_code' || Boolean(authUrl && (flow.manual_callback || connecting?.id === 'openai' || connecting?.id === 'openai-codex')));
+  const staleAuthorization = error.includes('已有授权正在进行') || error.includes('ChatGPT 授权通道正在使用');
 
   function resetProvider(provider: ProviderInfo, nextMethod: ConnectionMethod) {
     setConnecting(provider); setMethod(nextMethod); setConnectionName('我的 ' + (nextMethod === 'oauth' && provider.id === 'openai' ? 'ChatGPT 订阅' : providerLabel(provider)));
@@ -149,6 +150,14 @@ export default function ModelSettings({ initial, loggedIn, onLogin, onUpdate, no
       activeFlow.current = current.id; setFlow(current);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
+  async function resetOAuth() {
+    if (!connecting || busy) return;
+    setBusy(true); setError('');
+    try {
+      await api<{ cancelled: number }>('/models/oauth/reset', { method: 'POST' });
+      await startOAuth();
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
   async function connect(event: React.FormEvent) {
     event.preventDefault(); if (!connecting) return;
     if (method === 'oauth') return startOAuth();
@@ -162,11 +171,14 @@ export default function ModelSettings({ initial, loggedIn, onLogin, onUpdate, no
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   async function cancelFlow() {
+    if (busy) return;
     const previousFlow = flow;
-    activeFlow.current = null; setConnecting(null); setKey(''); setFlow(null); setAnswer(''); setError('');
     if (previousFlow?.status === 'pending') {
-      try { await api('/models/oauth/' + previousFlow.id + '/cancel', { method: 'POST' }); } catch (e) { notify((e as Error).message); }
+      setBusy(true); setError('');
+      try { await api('/models/oauth/' + previousFlow.id + '/cancel', { method: 'POST' }); }
+      catch (e) { setError((e as Error).message); setBusy(false); return; }
     }
+    activeFlow.current = null; setConnecting(null); setKey(''); setFlow(null); setAnswer(''); setError(''); setBusy(false);
   }
   async function sendAnswer(event: React.FormEvent) {
     event.preventDefault(); if (!flow?.prompt || flow.status !== 'pending' || exchanging || !answer.trim()) return;
@@ -259,7 +271,7 @@ export default function ModelSettings({ initial, loggedIn, onLogin, onUpdate, no
             {method === 'api_key' && connecting.id !== 'cloudflare' && <p className="setting-footnote">{connecting.id === 'qwen' ? '使用阿里云百炼（DashScope）API Key，请确认所选模型已开通。' : connecting.id === 'deepseek' ? '使用 DeepSeek 开放平台 API Key，模型调用按供应商规则计费。' : 'API 请求由服务端发送到供应商官方地址，保存后可验证凭证。'}</p>}
             {method === 'api_key' && connecting.id === 'qwen' && <><label htmlFor="qwen-base-url">百炼 API Base URL（可选）<input id="qwen-base-url" type="url" value={baseUrl} onChange={event => setBaseUrl(event.target.value)} placeholder="https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1" maxLength={2048} disabled={busy} /></label><p className="setting-footnote">新版百炼控制台可在工作空间查看 Base URL。API Key 与工作空间区域须匹配；留空时使用兼容的北京默认地址。</p></>}
           </> : <div className="subscription-note"><ShieldCheck size={21} /><div><strong>使用你的订阅账号连接</strong><p>登录流程由模型供应商提供。授权凭证只保存在服务端，不会显示在页面中。</p></div></div>}
-          {error && <div className="form-error" role="alert">{error}</div>}<button className="generate-button" disabled={busy}>{busy ? <Loader2 className="spin" size={16} /> : <Link2 size={16} />}{method === 'oauth' ? '开始账号授权' : '保存连接'}</button>
+          {error && <div className="form-error" role="alert">{error}</div>}{staleAuthorization && <button type="button" className="secondary-button" disabled={busy} onClick={() => void resetOAuth()}>清理旧授权并重新开始</button>}<button className="generate-button" disabled={busy}>{busy ? <Loader2 className="spin" size={16} /> : <Link2 size={16} />}{method === 'oauth' ? '开始账号授权' : '保存连接'}</button>
         </form> : <div className="oauth-flow">
           <div className={'oauth-state oauth-' + flow.status} role={flow.status === 'failed' ? 'alert' : 'status'}>{pending ? <Loader2 className="spin" size={23} /> : flow.status === 'connected' ? <CheckCircle2 size={23} /> : <Unplug size={23} />}<div><span>{flow.message}</span>{flow.stage && <small>{stageLabels[flow.stage] || '授权进度已更新'}</small>}{flow.http_status && <small>供应商响应 HTTP {flow.http_status}</small>}</div></div>
           {pending && <div className="oauth-session-note"><ShieldCheck size={14} /><span>只使用本次授权链接；旧链接的授权信息无法用于新的连接。</span></div>}

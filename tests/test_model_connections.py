@@ -404,6 +404,56 @@ def test_oauth_cancellation_owner_and_enterprise_domain_boundary(model_client):
     assert client.get("/api/models/config").json()["connections"] == []
 
 
+def test_oauth_cancel_releases_state_when_bridge_abort_fails(model_client):
+    client, bridge = model_client
+    start = client.post(
+        "/api/models/oauth", json={"provider": "github-copilot", "name": "Bridge failure"}
+    ).json()
+    wait_flow(client, start["id"], lambda value: value.get("prompt"))
+    original_request = bridge.request
+
+    async def fail_cancel(op, request_id=None, **payload):
+        if op == "cancel":
+            raise RuntimeError("bridge unavailable")
+        return await original_request(op, request_id=request_id, **payload)
+
+    bridge.request = fail_cancel
+    assert client.post("/api/models/oauth/" + start["id"] + "/cancel").status_code == 204
+    assert client.get("/api/models/oauth/" + start["id"]).json()["status"] == "cancelled"
+    retry = client.post(
+        "/api/models/oauth", json={"provider": "github-copilot", "name": "Retry after cancel"}
+    )
+    assert retry.status_code == 202
+
+
+def test_oauth_reset_clears_all_current_user_flows(model_client):
+    client, _ = model_client
+    start = client.post(
+        "/api/models/oauth", json={"provider": "github-copilot", "name": "Reset flow"}
+    ).json()
+    wait_flow(client, start["id"], lambda value: value.get("prompt"))
+    reset = client.post("/api/models/oauth/reset")
+    assert reset.status_code == 200 and reset.json() == {"cancelled": 1}
+    assert client.get("/api/models/oauth/" + start["id"]).json()["status"] == "cancelled"
+    retry = client.post(
+        "/api/models/oauth", json={"provider": "github-copilot", "name": "After reset"}
+    )
+    assert retry.status_code == 202
+
+
+def test_expired_oauth_flow_is_reaped_before_concurrency_check(model_client):
+    client, _ = model_client
+    start = client.post(
+        "/api/models/oauth", json={"provider": "github-copilot", "name": "Expired flow"}
+    ).json()
+    wait_flow(client, start["id"], lambda value: value.get("prompt"))
+    client.app.state.models.flows[start["id"]]["expires_at"] = time.time() - 1
+    retry = client.post(
+        "/api/models/oauth", json={"provider": "github-copilot", "name": "After expiry"}
+    )
+    assert retry.status_code == 202
+
+
 def test_logout_cancels_pending_authorization_and_unsupported_provider(model_client):
     client, _ = model_client
     assert (

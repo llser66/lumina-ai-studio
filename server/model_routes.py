@@ -71,6 +71,12 @@ async def oauth_cancel(flow_id: uuid.UUID, request: Request, user=Depends(mutati
     return Response(status_code=204)
 
 
+@router.post("/oauth/reset")
+async def oauth_reset(request: Request, user=Depends(mutation_user)):
+    cancelled = await request.app.state.models.cancel_user_flows(user["id"])
+    return {"cancelled": cancelled}
+
+
 @router.post("/oauth/{flow_id}/callback")
 async def oauth_callback(
     flow_id: uuid.UUID, body: OAuthCallback, request: Request, user=Depends(mutation_user)

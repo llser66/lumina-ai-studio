@@ -3,7 +3,7 @@ import { expect, Page, test } from '@playwright/test';
 const vision = { id: 'gpt-6-sol', name: 'GPT-6 Sol', input: ['text', 'image'], type: 'chat' };
 const textOnly = { id: 'text-test', name: 'Text Only Test', input: ['text'], type: 'chat' };
 
-async function setup(page: Page, { failFirst = false, manualPrompt = true } = {}) {
+async function setup(page: Page, { failFirst = false, manualPrompt = true, staleFirst = false } = {}) {
   const configuration = {
     owner_id: 'test-owner', sdk: 'pi-ai', sdk_version: 'test',
     providers: [
@@ -35,6 +35,10 @@ async function setup(page: Page, { failFirst = false, manualPrompt = true } = {}
     };
     if (pathname === '/api/models/config') return respond(configuration);
     if (pathname === '/api/models/oauth' && request.method() === 'POST') {
+      if (staleFirst && attempts === 0) {
+        attempts += 1;
+        return route.fulfill({ status: 409, json: { detail: '已有授权正在进行，请完成或取消后再试' } });
+      }
       attempts += 1; connected = false;
       return respond({ ...pending, id: 'flow-' + attempts, auth_url: 'https://example.com/authorize?state=fresh-' + attempts });
     }
@@ -63,6 +67,7 @@ async function setup(page: Page, { failFirst = false, manualPrompt = true } = {}
       configuration.preferences = request.postDataJSON();
       return respond(configuration);
     }
+    if (pathname === '/api/models/oauth/reset' && request.method() === 'POST') return respond({ cancelled: 1 });
     if (pathname.endsWith('/cancel')) return respond({ ok: true });
     return route.abort();
   });
@@ -114,6 +119,17 @@ test('failed authorization hides the stale link and retries with a fresh session
   await expect(dialog.getByRole('link', { name: '打开供应商授权页面' })).toHaveCount(0);
   await expect(dialog.getByLabel('授权码或回调地址', { exact: true })).toHaveCount(0);
   await dialog.getByRole('button', { name: '重新授权' }).click();
+  await expect(dialog.getByRole('link', { name: '打开供应商授权页面' })).toHaveAttribute('href', /fresh-2$/);
+  expect(state.attempts()).toBe(2);
+});
+
+test('stale authorization can be cleared and restarted from the dialog', async ({ page }) => {
+  const state = await setup(page, { staleFirst: true });
+  await page.locator('.provider-openai-codex').getByRole('button', { name: '添加连接' }).click();
+  const dialog = page.getByRole('dialog', { name: '连接模型账号' });
+  await dialog.getByRole('button', { name: '开始账号授权' }).click();
+  await expect(dialog).toContainText('已有授权正在进行');
+  await dialog.getByRole('button', { name: '清理旧授权并重新开始' }).click();
   await expect(dialog.getByRole('link', { name: '打开供应商授权页面' })).toHaveAttribute('href', /fresh-2$/);
   expect(state.attempts()).toBe(2);
 });

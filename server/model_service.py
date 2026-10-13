@@ -427,10 +427,56 @@ class ModelService:
             )
         }
 
+    async def _cancel_pending_flow(self, flow, message="授权已取消。"):
+        """Mark a flow closed before best-effort aborting its bridge request.
+
+        The bridge is a separate process and can be unavailable while the API is
+        still healthy.  OAuth state must therefore be released even when the
+        bridge cannot acknowledge the cancellation.
+        """
+        if flow["status"] != "pending":
+            return
+        task = flow.get("task")
+        flow.update(
+            status="cancelled",
+            message=message,
+            prompt=None,
+            manual_callback=False,
+            auth_url=None,
+            verification_url=None,
+            user_code=None,
+            retryable=True,
+        )
+        try:
+            await asyncio.wait_for(
+                self.bridge.request("cancel", target=flow["command_id"]), timeout=2
+            )
+        except (Exception, asyncio.CancelledError):
+            # State cleanup is local and must not depend on an IPC response.
+            pass
+        finally:
+            if task and not task.done():
+                task.cancel()
+
+    async def reap_oauth_flows(self):
+        """Release expired OAuth sessions before enforcing concurrency limits."""
+        now = time.time()
+        for flow in list(self.flows.values()):
+            if flow["status"] == "pending" and flow["expires_at"] <= now:
+                await self._cancel_pending_flow(flow, "本次授权已过期，请重新开始授权。")
+        # Keep terminal metadata briefly so a polling browser can see the final
+        # state, then discard it on the next authorization attempt.
+        self.flows = {
+            identifier: flow
+            for identifier, flow in self.flows.items()
+            if flow["expires_at"] > now - 300
+        }
+
     async def start_oauth(self, user_id, session_hash, body):
         if not self.providers[body.provider]["oauth"]:
             raise HTTPException(422, "该供应商不支持账号授权")
         self.preferred(body.provider, body.preferred_model)
+        await self.reap_oauth_flows()
         active = [flow for flow in self.flows.values() if flow["status"] == "pending"]
         if any(flow["user_id"] == user_id for flow in active) or len(active) >= 16:
             raise HTTPException(409, "已有授权正在进行，请完成或取消后再试")
@@ -438,12 +484,6 @@ class ModelService:
             flow["provider"] in {"openai", "openai-codex"} for flow in active
         ):
             raise HTTPException(409, "ChatGPT 授权通道正在使用，请稍后再试")
-        # Remove expired metadata; credentials never live in this flow dictionary.
-        self.flows = {
-            identifier: flow
-            for identifier, flow in self.flows.items()
-            if flow["expires_at"] > time.time() - 300
-        }
         identifier = str(uuid.uuid4())
         flow = {
             "id": identifier,
@@ -622,24 +662,21 @@ class ModelService:
 
     async def cancel(self, flow_id, user_id):
         flow = self.flow(flow_id, user_id)
-        if flow["status"] == "pending":
-            flow.update(
-                status="cancelled",
-                message="授权已取消。",
-                prompt=None,
-                manual_callback=False,
-                auth_url=None,
-                verification_url=None,
-                user_code=None,
-                retryable=True,
-            )
-            await self.bridge.request("cancel", target=flow["command_id"])
-            flow["task"].cancel()
+        await self._cancel_pending_flow(flow)
+
+    async def cancel_user_flows(self, user_id):
+        """Cancel all pending flows owned by a user for stale-session recovery."""
+        cancelled = 0
+        for flow in list(self.flows.values()):
+            if flow["user_id"] == user_id and flow["status"] == "pending":
+                await self._cancel_pending_flow(flow)
+                cancelled += 1
+        return cancelled
 
     async def cancel_session(self, session_hash):
         for flow in list(self.flows.values()):
             if flow["session_hash"] == session_hash and flow["status"] == "pending":
-                await self.cancel(flow["id"], flow["user_id"])
+                await self._cancel_pending_flow(flow)
 
     async def close(self):
         for flow in list(self.flows.values()):
