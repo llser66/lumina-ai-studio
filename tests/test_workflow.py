@@ -24,7 +24,8 @@ async def test_real_graph_saves_private_image_and_prompt_trace(client, user, pro
     job = enqueue(client).json()
     row = await process(client, provider)
     assert row["status"] == "succeeded"
-    assert row["enhanced_prompt"].startswith("Refined:")
+    assert row["enhanced_prompt"].startswith(row["prompt"])
+    assert provider.prompt.startswith(row["prompt"])
     assert provider.calls == 1
     details = client.get("/api/jobs/" + job["id"]).json()
     stages = [event["stage"] for event in details["events"]]

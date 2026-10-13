@@ -15,6 +15,7 @@
 - 已修复远程对象存储短暂不可用时过期任务阻塞工作队列的问题：验证/内容检查阶段会直接恢复，已开始供应商调用的任务会安全标记为待核对；内容检查模型请求最多等待 90 秒。
 - 已修复工作进程异常处理再次探测远程存储时抛错的问题：公网模型或存储连接异常时，任务会落为明确的工作流失败或供应商结果待核对，不再每分钟重复恢复直到“归档恢复未完成”。
 - 已修复 Supabase Storage 对不存在对象返回 `HTTP 400` 空响应的兼容性：将其识别为正常的缓存未命中，不再在首次生图、内容检查或描述优化前阻断任务。
+- 已为智能描述优化增加原始主体锁定：最终发送给生图模型的提示词始终保留用户原文，优化模型只能补充视觉细节，不能替换主体。
 - 已接入 OpenAI、OpenRouter、Cloudflare Workers AI、DeepSeek、通义千问等模型连接类型；Cloudflare Workers AI 同一连接可用于 FLUX.1 生图和 Llama 3.1 文本检查／描述优化。
 - Supabase 项目 `lumina-ai-studio` 已创建；私有 `lumina-assets` Storage bucket 已创建；公网数据库使用 PostgreSQL。
 - GitHub 私有仓库 `llser66/lumina-ai-studio` 的 `main` 分支已连接 Render。

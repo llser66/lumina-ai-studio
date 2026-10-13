@@ -26,6 +26,7 @@ class TestImageProvider:
         self.allowed = True
         self.failure = None
         self.reference = None
+        self.prompt = None
 
     async def enhance(self, prompt):
         return "Refined: " + prompt
@@ -35,6 +36,7 @@ class TestImageProvider:
 
     async def generate(self, spec, prompt, reference, model):
         self.calls += 1
+        self.prompt = prompt
         self.reference = reference
         if self.failure:
             raise self.failure
