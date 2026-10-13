@@ -119,9 +119,11 @@ class SupabaseAssetStore:
         response = self.client.head(self._url(key), headers=self._headers())
         if response.status_code == 404:
             return False
-        if response.status_code == 400 and re.search(
-            r"(?:not found|not_found|statuscode.{0,8}404)", response.text, flags=re.IGNORECASE
-        ):
+        # Supabase Storage may answer HEAD for a missing object with HTTP 400
+        # and an empty body, so there is no 404 marker to inspect.  The key has
+        # already passed our strict namespace validation; treat both forms as
+        # a normal cache miss and let uploads surface real bucket errors.
+        if response.status_code == 400:
             return False
         if response.is_error:
             raise RuntimeError(f"Private image storage check failed (HTTP {response.status_code})")

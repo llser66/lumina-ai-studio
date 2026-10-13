@@ -58,6 +58,13 @@ def test_supabase_head_recognizes_missing_private_object():
     assert not storage.exists("users/user-1/outputs/job-1.png")
 
 
+def test_supabase_head_recognizes_empty_400_as_missing_private_object():
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(400)))
+    storage = SupabaseAssetStore("https://project.supabase.co", "service-secret", client=client)
+
+    assert not storage.exists("users/user-1/outputs/job-1.png")
+
+
 def test_postgres_query_translation_preserves_existing_conflict_handling():
     from server.db import postgres_sql
 
