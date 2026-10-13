@@ -46,19 +46,40 @@ class Worker:
             raise
         except Exception as exc:
             row = self.db.one("SELECT * FROM jobs WHERE id=?", (job["id"],))
-            if row["status"] not in TERMINAL:
-                output_key = self.asset_store.output_key(job["user_id"], job["id"])
-                if self.asset_store.exists(output_key):
+            storage_probe_failed = False
+            if row and row["status"] not in TERMINAL:
+                try:
+                    output_key = self.asset_store.output_key(job["user_id"], job["id"])
+                    output_exists = self.asset_store.exists(output_key)
+                except Exception:
+                    # Error handling must not fail a second time when remote
+                    # storage is unavailable.  Before a billable provider call
+                    # we can safely fail and let the user retry; afterwards we
+                    # must keep the result uncertain to avoid duplicate billing.
+                    output_exists = False
+                    storage_probe_failed = True
+                if output_exists:
                     self.db.recover(job["id"])
+                elif row["provider_started_at"]:
+                    self.db.fail(
+                        job["id"],
+                        "provider_unknown",
+                        "连接中断，供应商结果待确认。为避免重复计费，此任务不会自动重试。",
+                        uncertain=True,
+                    )
                 else:
                     self.db.fail(
                         job["id"],
                         "workflow_error",
-                        "任务执行中断，请联系管理员核对。",
-                        uncertain=bool(row["provider_started_at"]),
+                        "任务执行中断，请检查模型连接后重试。",
                     )
             # Never log exception strings: providers may include prompts or credentials.
-            logger.error("job_id=%s exception_type=%s", job["id"], type(exc).__name__)
+            logger.error(
+                "job_id=%s exception_type=%s storage_probe_failed=%s",
+                job["id"],
+                type(exc).__name__,
+                storage_probe_failed,
+            )
         finally:
             heartbeat.cancel()
             with contextlib.suppress(asyncio.CancelledError):

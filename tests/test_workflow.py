@@ -158,6 +158,36 @@ async def test_expired_lease_with_durable_image_resumes_safely(client, user, pro
     assert provider.calls == 0
 
 
+async def test_worker_records_failure_when_error_handler_cannot_probe_remote_storage(client, user):
+    enqueue(client)
+    db = client.app.state.db
+
+    class BrokenRemoteStore:
+        def output_key(self, user_id, job_id):
+            return f"users/{user_id}/outputs/{job_id}.png"
+
+        def exists(self, key):
+            raise RuntimeError("test-only storage outage")
+
+    class FailingGraph:
+        async def aget_state(self, config):
+            return type("Snapshot", (), {"values": {}, "next": ()})()
+
+        async def ainvoke(self, value, config, durability):
+            raise RuntimeError("test-only provider failure")
+
+    worker = Worker(
+        db,
+        FailingGraph(),
+        client.app.state.settings.data_dir / "outputs",
+        asset_store=BrokenRemoteStore(),
+    )
+    await worker.process(db.claim(worker.owner))
+    row = db.one("SELECT * FROM jobs ORDER BY created_at DESC LIMIT 1")
+    assert row["status"] == "failed"
+    assert row["error_code"] == "workflow_error"
+
+
 def test_archive_recovery_has_a_finite_limit(client, user, png):
     job = enqueue(client).json()
     db = client.app.state.db
