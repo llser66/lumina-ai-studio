@@ -12,6 +12,7 @@
 - 已实现注册登录、Cookie 会话、CSRF、用户数据隔离、任务队列、任务时间线、作品库、收藏、下载、限流和额度控制。
 - 已实现模型与订阅配置，支持订阅授权、API Key 和自定义 OpenAI 兼容接口；凭证按账户加密保存。
 - 已修复订阅授权取消后的残留会话：服务端会在取消时先释放状态、回收过期流程；页面提供清理旧授权并重新开始的恢复入口。
+- 已修复远程对象存储短暂不可用时过期任务阻塞工作队列的问题：验证/内容检查阶段会直接恢复，已开始供应商调用的任务会安全标记为待核对；内容检查模型请求最多等待 90 秒。
 - 已接入 OpenAI、OpenRouter、Cloudflare Workers AI、DeepSeek、通义千问等模型连接类型。
 - Supabase 项目 `lumina-ai-studio` 已创建；私有 `lumina-assets` Storage bucket 已创建；公网数据库使用 PostgreSQL。
 - GitHub 私有仓库 `llser66/lumina-ai-studio` 的 `main` 分支已连接 Render。
@@ -24,7 +25,7 @@
 - `render blueprints validate render.yaml`：通过。
 - Render Docker 镜像构建：通过。
 - Render 应用启动：通过，Uvicorn 监听 8090，健康检查返回 200。
-- 本轮验收：后端 pytest 138 项（覆盖率 88%）、模型桥接测试 34 项、前端构建和 E2E 18 项均通过。
+- 本轮验收：后端 pytest 139 项（覆盖率 88%）、模型桥接测试 34 项、前端构建和 E2E 18 项均通过；本次改动的工作流、模型连接测试及 Ruff 检查均通过。
 
 ## 当前限制与未验证事项
 

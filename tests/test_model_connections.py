@@ -309,6 +309,8 @@ async def test_selected_pi_image_model_is_pinned_and_runs_real_graph(model_clien
         await worker.process(db.claim(worker.owner))
     assert client.get("/api/jobs/" + job["id"]).json()["status"] == "succeeded"
     assert [call[0] for call in bridge.calls] == ["enhance", "moderate", "image"]
+    moderate_call = next(call for call in bridge.calls if call[0] == "moderate")
+    assert moderate_call[1]["timeout"] == 90
     assert router.jobs == {}
     assert client.get("/api/jobs/" + job["id"]).json()["image_url"]
 

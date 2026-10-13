@@ -119,6 +119,31 @@ def test_expired_lease_before_and_during_provider_call(client, user):
     assert db.one("SELECT status FROM jobs WHERE id=?", (unknown["id"],))["status"] == "uncertain"
 
 
+def test_expired_recovery_does_not_probe_storage_before_provider_call(client, user):
+    safe = enqueue(client).json()
+    unknown = enqueue(client, prompt="A tall mountain beneath a planet").json()
+    db = client.app.state.db
+    db.execute(
+        "UPDATE jobs SET status='moderating',lease_until=? WHERE id=?",
+        (time.time() - 1, safe["id"]),
+    )
+    db.execute(
+        "UPDATE jobs SET status='generating',lease_until=?,provider_started_at=? WHERE id=?",
+        (time.time() - 1, time.time(), unknown["id"]),
+    )
+
+    class BrokenRemoteStore:
+        def output_key(self, user_id, job_id):
+            return f"users/{user_id}/outputs/{job_id}.png"
+
+        def exists(self, key):
+            raise RuntimeError("test-only storage outage")
+
+    db.recover_expired(BrokenRemoteStore())
+    assert db.one("SELECT status FROM jobs WHERE id=?", (safe["id"],))["status"] == "queued"
+    assert db.one("SELECT status FROM jobs WHERE id=?", (unknown["id"],))["status"] == "uncertain"
+
+
 async def test_expired_lease_with_durable_image_resumes_safely(client, user, provider, png):
     job = enqueue(client).json()
     data = client.app.state.settings.data_dir

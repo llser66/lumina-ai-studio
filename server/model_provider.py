@@ -20,6 +20,11 @@ MESSAGES = {
     "provider_unknown": "供应商结果待确认，此任务不会自动重试。",
 }
 
+# Content checks are a small, non-billable request.  Keep a separate bound so
+# a provider that never completes cannot leave the task card spinning for the
+# full image-generation timeout.
+CONTENT_CHECK_TIMEOUT_SECONDS = 90
+
 
 def checked(result, *, billable=False, source=""):
     if not result.get("ok"):
@@ -113,6 +118,7 @@ class JobProvider:
         result = checked(
             await self.service.bridge.request(
                 "moderate",
+                timeout=CONTENT_CHECK_TIMEOUT_SECONDS,
                 connection=await self.service.request_payload(connection),
                 model=self.row["text_model"],
                 prompt=prompt,

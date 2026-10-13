@@ -361,11 +361,30 @@ class Database:
             "SELECT * FROM jobs WHERE status NOT IN ('queued','succeeded','failed','cancelled','uncertain') AND lease_until<?",
             (time.time(),),
         ):
-            if hasattr(outputs, "output_key"):
-                output_exists = outputs.exists(outputs.output_key(job["user_id"], job["id"]))
-            else:
-                output_exists = (outputs / f"{job['id']}.png").exists()
-            if output_exists or not job["provider_started_at"]:
+            # Before the billable provider call starts, there cannot be a
+            # durable provider result to recover.  Avoid probing remote object
+            # storage for these jobs: a transient storage outage must not keep
+            # a stale validation/moderation job blocking the whole queue.
+            if not job["provider_started_at"]:
+                self.recover(job["id"])
+                continue
+            try:
+                if hasattr(outputs, "output_key"):
+                    output_exists = outputs.exists(outputs.output_key(job["user_id"], job["id"]))
+                else:
+                    output_exists = (outputs / f"{job['id']}.png").exists()
+            except Exception:
+                # We cannot prove whether a provider result was persisted when
+                # object storage is unavailable.  Mark it uncertain instead of
+                # retrying and risking a duplicate billable generation.
+                self.fail(
+                    job["id"],
+                    "provider_unknown",
+                    "连接中断，供应商结果待确认。为避免重复计费，此任务不会自动重试。",
+                    uncertain=True,
+                )
+                continue
+            if output_exists:
                 self.recover(job["id"])
             else:
                 self.fail(
