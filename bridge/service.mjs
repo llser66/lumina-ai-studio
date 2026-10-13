@@ -5,7 +5,7 @@ import { createModels } from '@earendil-works/pi-ai';
 import { factories, createRuntimeProvider, QWEN_BASE_URL } from './provider-factories.mjs';
 import { createPinnedFetch } from './pinned-fetch.mjs';
 import { clearOpenRouterImageCatalog, generateOpenRouterImage } from './openrouter-images.mjs';
-import { generateCloudflareImage, verifyCloudflareToken } from './cloudflare-images.mjs';
+import { generateCloudflareImage, generateCloudflareText, verifyCloudflareToken } from './cloudflare-images.mjs';
 import { classifyOAuthFailure } from './oauth-errors.mjs';
 import { installOAuthDiagnostics, withOAuthDiagnostics } from './oauth-diagnostics.mjs';
 
@@ -137,7 +137,7 @@ export async function operation(command, signal, requestFetch = fetch) {
   if (command.op === 'check') return verify(command.connection, signal, requestFetch);
   if (command.connection.provider === 'cloudflare') {
     if (command.op === 'image') return generateCloudflareImage(command, signal, requestFetch);
-    return { ok: false, code: 'model_unavailable' };
+    return generateCloudflareText(command, signal, requestFetch);
   }
   const { models } = context(command.connection);
   const transport = transportState(requestFetch);

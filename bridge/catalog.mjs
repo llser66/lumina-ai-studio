@@ -18,7 +18,7 @@ export function catalog() {
   }));
   providers.push({
     id: 'cloudflare', name: 'Cloudflare Workers AI', api_key: true, oauth: false, subscription: false,
-    chat_models: [],
+    chat_models: [{ id: '@cf/meta/llama-3.1-8b-instruct', name: 'Llama 3.1 8B · 文本', input: ['text'], type: 'chat', reasoning: false }],
     image_models: [{ id: '@cf/black-forest-labs/flux-1-schnell', name: 'FLUX.1 schnell', input: ['text'], type: 'image', reasoning: false }],
   });
   return providers;

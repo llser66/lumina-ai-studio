@@ -109,17 +109,19 @@ def test_cloudflare_image_connection_is_private_and_requires_account_id(model_cl
     assert [model["id"] for model in row["image_models"]] == [
         "@cf/black-forest-labs/flux-1-schnell"
     ]
-    assert row["chat_models"] == []
+    assert [model["id"] for model in row["chat_models"]] == [
+        "@cf/meta/llama-3.1-8b-instruct"
+    ]
     assert account_id not in str(config)
     assert "test-only-cloudflare-token" not in str(config)
     stored = client.app.state.db.one("SELECT * FROM model_connections WHERE id=?", (row["id"],))
     assert account_id not in stored["credential"]
     assert client.app.state.models.vault.credential(stored)["account_id"] == account_id
-    missing_text = client.put(
+    same_connection_text = client.put(
         "/api/models/preferences",
         json={"image_connection_id": row["id"], "image_model": row["image_models"][0]["id"]},
     )
-    assert missing_text.status_code == 422
+    assert same_connection_text.status_code == 200
     text_connection = connect(client, "deepseek")
     text_row = next(
         item
