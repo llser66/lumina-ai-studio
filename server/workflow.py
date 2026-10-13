@@ -66,16 +66,12 @@ def build_graph(db, provider, outputs, checkpointer, asset_store=None):
     async def enhance(state):
         stage(state, "enhancing", "正在优化画面细节与构图")
         enhanced = await selected_provider(state).enhance(state["effective_prompt"])
-        original = job(state)["prompt"].strip()
-        # The enhancer is allowed to add visual detail, but it must never be
-        # able to replace the user's subject. Keep the exact original brief in
-        # the final provider prompt so a weak or hallucinating text model cannot
-        # turn a requested subject into an unrelated scene.
-        prompt = (
-            f"{original}\n\nAdditional visual details (do not replace the subject):\n{enhanced}"
-            if original
-            else enhanced
-        )
+        # The enhancer receives the original brief and is instructed to keep
+        # its subject. Send its final, normalized prompt to the image model
+        # directly: Cloudflare FLUX is much more reliable with the English
+        # output than with a second copy of the original Chinese brief
+        # prepended to it.
+        prompt = enhanced.strip()
         stage(state, "enhancing", "创作描述已整理", enhanced_prompt=prompt)
         return {"effective_prompt": prompt}
 
