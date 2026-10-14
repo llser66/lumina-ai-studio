@@ -16,6 +16,7 @@
 - 已修复工作进程异常处理再次探测远程存储时抛错的问题：公网模型或存储连接异常时，任务会落为明确的工作流失败或供应商结果待核对，不再每分钟重复恢复直到“归档恢复未完成”。
 - 已修复 Supabase Storage 对不存在对象返回 `HTTP 400` 空响应的兼容性：将其识别为正常的缓存未命中，不再在首次生图、内容检查或描述优化前阻断任务。
 - 已修复 Cloudflare FLUX 中文提示词偏离主体的问题：描述优化明确要求保留原始主体并输出英文，最终只把规范化后的英文提示词发送给英文优化的生图模型，避免中文原文与优化结果互相干扰。
+- 已修复 Cloudflare 连接保存失败的问题：API Key 弹窗不再提交隐藏的默认文本模型，只发送 Account ID 和 API Token，保存后可继续单独选择文本模型。
 - 已接入 OpenAI、OpenRouter、Cloudflare Workers AI、DeepSeek、通义千问等模型连接类型；Cloudflare Workers AI 同一连接可用于 FLUX.1 生图和 Llama 3.1 文本检查／描述优化。
 - Supabase 项目 `lumina-ai-studio` 已创建；私有 `lumina-assets` Storage bucket 已创建；公网数据库使用 PostgreSQL。
 - GitHub 私有仓库 `llser66/lumina-ai-studio` 的 `main` 分支已连接 Render。
@@ -28,7 +29,7 @@
 - `render blueprints validate render.yaml`：通过。
 - Render Docker 镜像构建：通过。
 - Render 应用启动：通过，Uvicorn 监听 8090，健康检查返回 200。
-- 本轮验收：后端 pytest 141 项（覆盖率 88%）、模型桥接测试 36 项、前端构建和 E2E 18 项均通过；本次改动的工作流、模型连接测试及 Ruff 检查均通过。
+- 本轮验收：后端 pytest 141 项（覆盖率 88.17%）、模型桥接测试 36 项、前端构建和 E2E 18 项均通过；Ruff 检查通过。
 - 本轮提示词修复验收：后端 pytest 141 项、模型桥接测试 36 项、前端生产构建和 Ruff 检查均通过。
 
 ## 当前限制与未验证事项

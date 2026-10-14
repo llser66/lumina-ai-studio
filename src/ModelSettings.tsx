@@ -124,7 +124,9 @@ export default function ModelSettings({ initial, loggedIn, onLogin, onUpdate, no
 
   function resetProvider(provider: ProviderInfo, nextMethod: ConnectionMethod) {
     setConnecting(provider); setMethod(nextMethod); setConnectionName('我的 ' + (nextMethod === 'oauth' && provider.id === 'openai' ? 'ChatGPT 订阅' : providerLabel(provider)));
-    setPreferredModel(preferredChatModel(provider)); setKey(''); setAccountId(''); setError(''); setFlow(null); setAnswer(''); activeFlow.current = null;
+    // Cloudflare connections are image-first: the API only accepts Account ID
+    // and token at creation time. Text routing can be selected later below.
+    setPreferredModel(provider.id === 'cloudflare' ? '' : preferredChatModel(provider)); setKey(''); setAccountId(''); setError(''); setFlow(null); setAnswer(''); activeFlow.current = null;
   }
   function open(provider: ProviderInfo) {
     resetProvider(provider, provider.id === 'custom' ? 'custom' : provider.id === 'github-copilot' || (!provider.api_key && provider.oauth) ? 'oauth' : 'api_key');
