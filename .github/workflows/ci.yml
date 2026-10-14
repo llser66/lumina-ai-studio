@@ -1,0 +1,43 @@
+name: Lumina quality
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENAI_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements-dev.lock
+          .venv/bin/python -m pip install --no-deps -e .
+          npm ci --no-fund
+          npx playwright install --with-deps chromium
+      - name: Build and check
+        run: |
+          npm run build
+          npm run test:bridge
+          .venv/bin/python -m ruff check server tests
+          .venv/bin/python -m pytest --cov=server --cov-fail-under=80
+          npm run test:e2e
+      - name: Dependency audit
+        run: |
+          npm audit --audit-level=high
+          .venv/bin/python -m pip_audit --disable-pip --no-deps -r requirements.lock
+      - name: Container build
+        run: docker build -t lumina-ci .
